@@ -442,7 +442,7 @@ jobs:
 | :--- | :--- | :--- | :--- |
 | **Code Changes** | High (interfaces, dependency injection) | Low | **Zero (works on unmodified binaries)** |
 | **Mocking Effort** | Manual (`gomock`, stubs) | None (uses real DB) | **Automatic (captures network bytes)** |
-| **Execution Speed** | Fast (<1s) | Slow (minutes) | **Fast (runs in seconds)** |
+| **Execution Speed** | Fast (&lt;1s) | Slow (minutes) | **Fast (runs in seconds)** |
 | **Flakiness** | Low | High (network drops, state drift) | **Deterministic (idempotent YAML)** |
 | **Coverage Accuracy**| Synthetic / Mock assumptions | Real production flows | **Real traffic captured accurately** |
 
