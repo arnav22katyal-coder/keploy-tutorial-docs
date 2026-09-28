@@ -84,10 +84,4 @@ pre code {
   font-family: var(--font-mono);
 }
 
-.glow-orange {
-  box-shadow: 0 0 35px -5px rgba(255, 107, 0, 0.25);
-}
 
-.dark .glow-orange {
-  box-shadow: 0 0 45px -5px rgba(255, 107, 0, 0.2);
-}
