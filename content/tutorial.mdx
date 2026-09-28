@@ -10,7 +10,7 @@ In this tutorial, I'll walk you through testing a Go Gin authentication service 
 
 - **Apple Silicon Docker Desktop eBPF Virtualization:** Container-to-container packets over user bridge networks don't traverse standard host sockets, so the Keploy container couldn't capture traffic from a `curl` on the macOS host natively. The solution was the containerized Docker flow.
 - **Go 1.23 Docker Toolchain Mismatch:** I had to update the sample `Dockerfile` from `golang:1.20-alpine` to `golang:1.23-alpine` because `go.mod` required `go1.23.0`.
-- **Docker Image Version Pinning:** Without a tag, `ghcr.io/keploy/keploy` pulls a `v3` image where the entrypoint is different. Pinning to `:v2.4.0` fixed it.
+- **Docker Image Version Pinning:** Without a tag, `ghcr.io/keploy/keploy` pulls a `v3` image where the entrypoint is different. Pinning to `:2.4.0` fixed it.
 - **The Redis host:** In the Docker flow, the Redis host in `helpers/redis/redisConnect.go` changes to `myredis:6379`.
 - **Dynamic Token Noise:** The verify API generates a JWT signed token on every run, failing the test. Adding `body.token` to the noise section in the test YAML made it pass.
 
@@ -52,10 +52,10 @@ docker run -d --name myredis --network keploy-net redis:latest
 
 <Step title="Record API Traffic">
 
-I used the official Keploy Docker container, pinned to version `v2.4.0`. Setting up an alias makes the CLI commands easier to run.
+I used the official Keploy Docker container, pinned to version `2.4.0`. Setting up an alias makes the CLI commands easier to run.
 
 ```bash title="Terminal"
-alias keploy="sudo docker run --name keploy-v2 -p 16789:16789 --privileged --pid=host -it -v $(pwd):/app -v /sys/fs/bpf:/sys/fs/bpf -v /sys/kernel/debug:/sys/kernel/debug -v /var/run/docker.sock:/var/run/docker.sock -v /etc/docker/certs.d:/etc/docker/certs.d --rm ghcr.io/keploy/keploy:v2.4.0"
+alias keploy="sudo docker run --name keploy-v2 -p 16789:16789 --privileged --pid=host -it -v $(pwd):/app -v /sys/fs/bpf:/sys/fs/bpf -v /sys/kernel/debug:/sys/kernel/debug -v /var/run/docker.sock:/var/run/docker.sock -v /etc/docker/certs.d:/etc/docker/certs.d --rm ghcr.io/keploy/keploy:2.4.0"
 ```
 
 Then, I started Keploy in record mode. Keploy automatically intercepted the network calls.
