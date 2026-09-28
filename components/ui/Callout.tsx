@@ -4,11 +4,10 @@ import {
   Lightbulb,
   AlertTriangle,
   CheckCircle2,
-  Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type CalloutType = 'info' | 'tip' | 'warning' | 'success' | 'keploy'
+export type CalloutType = 'info' | 'tip' | 'warning' | 'success'
 
 interface CalloutProps {
   type?: CalloutType
@@ -64,15 +63,6 @@ const calloutConfig: Record<
     badgeText: 'SUCCESS',
     titleText: 'Success',
     iconColor: 'text-teal-600 dark:text-teal-400',
-  },
-  keploy: {
-    icon: Sparkles,
-    borderClass: 'border-brand-500/40 dark:border-brand-500/30',
-    bgClass: 'bg-orange-50/60 dark:bg-orange-950/20',
-    badgeBg: 'bg-orange-100 text-orange-700 dark:bg-brand-950/80 dark:text-brand-300',
-    badgeText: 'KEPLOY MAGIC',
-    titleText: 'How Keploy Works Here',
-    iconColor: 'text-brand-600 dark:text-brand-400',
   },
 }
 
