@@ -14,6 +14,8 @@ In this tutorial, I'll walk you through testing a Go Gin authentication service 
 - **The Redis host:** In the Docker flow, the Redis host in `helpers/redis/redisConnect.go` changes to `myredis:6379`.
 - **Dynamic Token Noise:** The verify API generates a JWT signed token on every run, failing the test. Adding `body.token` to the noise section in the test YAML made it pass.
 
+<KeployFlowDiagram />
+
 ---
 
 <StepGroup>

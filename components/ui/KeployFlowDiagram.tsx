@@ -28,7 +28,7 @@ const stages: FlowStage[] = [
     step: '01',
     title: 'Zero-Code Instrumentation',
     subtitle: 'No SDK or handler refactoring',
-    command: 'keploy record -c "go run main.go"',
+    command: 'keploy record -c "docker run ..."',
     icon: Code2,
     description:
       'Unlike traditional testing frameworks that force you to write mock interfaces, dependency injection containers, and stub boilerplate, Keploy runs alongside your Go binary without touching a single line of application source code.',
@@ -42,10 +42,10 @@ const stages: FlowStage[] = [
     step: '02',
     title: 'Traffic & Dependency Capture',
     subtitle: 'Intercepts ingress & egress in flight',
-    command: 'curl -X POST http://localhost:8080/user/getOTP ...',
+    command: "curl 'localhost:3001/api/getVerificationCode...'",
     icon: Radio,
     description:
-      'Send real API calls to your endpoints. Keploy captures the exact HTTP request, HTTP response, and all downstream TCP network transactions made by your app to Redis (like SETEX and GET).',
+      'Send real API calls to your endpoints. Keploy captures the exact HTTP request, HTTP response, and all downstream TCP network transactions made by your app to Redis (like SET and GET).',
     highlights: [
       'Synchronous correlation of API calls and DB operations',
       'Captures wire-level Redis RESP protocol commands',
@@ -70,7 +70,7 @@ const stages: FlowStage[] = [
     step: '04',
     title: 'Hermetic Offline Replay',
     subtitle: 'Run in CI/CD without Redis',
-    command: 'keploy test -c "go run main.go"',
+    command: 'keploy test -c "docker run ..."',
     icon: PlayCircle,
     description:
       'During test execution, Keploy boots your Gin app and feeds it recorded HTTP requests. When the app queries Redis, Keploy intercepts the call and serves the recorded mock. Redis can be completely shut down!',

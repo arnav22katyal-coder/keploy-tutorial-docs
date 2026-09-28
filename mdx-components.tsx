@@ -4,6 +4,7 @@ import { Callout } from '@/components/ui/Callout'
 import { StepGroup, Step } from '@/components/ui/StepGroup'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
 import { Pre, Figure, Figcaption } from '@/components/ui/Pre'
+import { KeployFlowDiagram } from '@/components/ui/KeployFlowDiagram'
 
 export const customMDXComponents: MDXComponents = {
   h1: ({ children, ...props }) => (
@@ -134,6 +135,7 @@ export const customMDXComponents: MDXComponents = {
   TabsList,
   TabsTrigger,
   TabsContent,
+  KeployFlowDiagram,
 }
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
