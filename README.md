@@ -2,7 +2,7 @@
 
 This is my tutorial for Keploy's Go `gin-redis` quickstart. It is a single-page, static, beginner-friendly walkthrough built with Next.js, MDX, and Tailwind CSS. The tutorial focuses on my actual experience running Keploy using its Docker setup, explaining the real-world friction points and "a-ha" moments like dynamic token noise handling.
 
-**Live demo:** [Live Demo Placeholder]
+**Live demo:** https://keploy-tutorial-docs.vercel.app/
 
 ## Run locally
 
