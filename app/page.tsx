@@ -1,3 +1,5 @@
+'use client'
+
 import * as React from 'react'
 import Link from 'next/link'
 import {
@@ -7,7 +9,6 @@ import {
   ExternalLink,
   Sparkles,
   ChevronRight,
-  Zap,
   Layers,
   Search,
   MessageSquare,
@@ -15,12 +16,23 @@ import {
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { TableOfContents } from '@/components/ui/TableOfContents'
 import { ReadingProgress } from '@/components/ui/ReadingProgress'
+import { SearchDialog } from '@/components/ui/SearchDialog'
+import { customMDXComponents } from '@/mdx-components'
 import TutorialContent from '@/content/tutorial.mdx'
 
 export default function TutorialPage() {
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    const handleOpenSearch = () => setIsSearchOpen(true)
+    window.addEventListener('open-search', handleOpenSearch)
+    return () => window.removeEventListener('open-search', handleOpenSearch)
+  }, [])
+
   return (
     <div className="relative min-h-screen bg-background">
       <ReadingProgress />
+      <SearchDialog isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
       {/* Top Navbar */}
       <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -47,17 +59,30 @@ export default function TutorialPage() {
             </span>
           </div>
 
-          {/* Center / Search Mock */}
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border/70 bg-muted/40 text-xs text-muted-foreground w-64">
-            <Search className="h-3.5 w-3.5" />
+          {/* Center / Search Mock Button */}
+          <button
+            type="button"
+            onClick={() => setIsSearchOpen(true)}
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border/70 bg-muted/40 text-xs text-muted-foreground hover:border-brand-500/50 hover:bg-muted/70 transition-all w-64 text-left"
+          >
+            <Search className="h-3.5 w-3.5 text-brand-500" />
             <span className="flex-1">Search quickstarts...</span>
             <kbd className="px-1.5 py-0.5 rounded border border-border bg-background text-[10px] font-mono">
               ⌘K
             </kbd>
-          </div>
+          </button>
 
           {/* Right: Actions */}
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              aria-label="Open search dialog"
+              className="md:hidden flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+
             <a
               href="https://github.com/keploy/keploy"
               target="_blank"
@@ -148,7 +173,7 @@ export default function TutorialPage() {
             </a>
 
             <a
-              href="#why-keploy-for-go"
+              href="#architecture-deep-dive"
               className="inline-flex items-center gap-2 rounded-xl border border-border/70 hover:bg-muted/60 px-3.5 py-2 text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-all"
             >
               <Layers className="h-4 w-4" />
@@ -161,7 +186,7 @@ export default function TutorialPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           {/* Main Tutorial Body (rendered MDX) */}
           <main className="lg:col-span-8 xl:col-span-9 max-w-none">
-            <TutorialContent />
+            <TutorialContent components={customMDXComponents} />
           </main>
 
           {/* Sticky Sidebar (Table of Contents) */}

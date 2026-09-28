@@ -25,13 +25,13 @@ In this tutorial, you will take a **Go Gin** user authentication service that de
 
 Go is renowned for its speed, simplicity, and rock-solid concurrency. But testing stateful web services in Go frequently introduces interface pollution. To test a handler that touches Redis, you often end up creating:
 
-```go
-// Traditional approach: interface pollution just for mocking
+<CodeBlock language="go" filename="Traditional Go Interface (Mock Boilerplate)">
+{`// Traditional approach: interface pollution just for mocking
 type OTPStore interface {
     SetOTP(ctx context.Context, email, otp string) error
     GetOTP(ctx context.Context, email string) (string, error)
-}
-```
+}`}
+</CodeBlock>
 
 While clean architecture is valuable, mocking complex database interactions like Redis TTL expirations, transaction pipelines, and socket failures by hand is tedious and disconnected from production reality.
 
@@ -98,7 +98,7 @@ wsl --install
 
 <h2 id="architecture-deep-dive">The 4-Phase Keploy Lifecycle</h2>
 
-Before running the commands, let's understand how Keploy transitions from recording mode to hermetic test replay:
+Before running the commands, let&apos;s understand how Keploy transitions from recording mode to hermetic test replay:
 
 <KeployFlowDiagram />
 
@@ -107,13 +107,12 @@ Before running the commands, let's understand how Keploy transitions from record
 <StepGroup>
 
 <Step
+  id="step-1-clone-app"
   number="01"
   title="Clone the Gin + Redis Sample Application"
   time="2 min"
   badge="Codebase Setup"
 >
-
-<div id="step-1-clone-app"></div>
 
 Keploy provides an official sample repository featuring a Gin web service integrated with Redis. Clone the repository and navigate into the `gin-redis` directory:
 
@@ -174,13 +173,12 @@ Notice that `main.go` uses standard `github.com/gin-gonic/gin` and `github.com/r
 </Step>
 
 <Step
+  id="step-2-start-redis"
   number="02"
   title="Spin Up Downstream Redis"
   time="1 min"
   badge="Infrastructure"
 >
-
-<div id="step-2-start-redis"></div>
 
 During the **Record** phase, Keploy needs a live instance of Redis so your application can perform its normal operations. We can start Redis quickly using Docker:
 
@@ -200,20 +198,18 @@ You will only need this live Redis container running while you record your initi
 </Step>
 
 <Step
+  id="step-3-record-traffic"
   number="03"
   title="Record Traffic with Keploy"
   time="2 min"
   badge="Core Command"
 >
 
-<div id="step-3-record-traffic"></div>
-
 Now, instead of launching your application with `go run main.go`, wrap it with `keploy record`:
 
 <CodeBlock language="bash" filename="Terminal">
 {`# Launch application under Keploy recording mode
-sudo -E keploy record -c "go run main.go"`
-}
+sudo -E keploy record -c "go run main.go"`}
 </CodeBlock>
 
 <Callout type="keploy" title="What is happening right now?">
@@ -240,15 +236,18 @@ Keep this terminal running. Open a second terminal window for the next step.
 </Step>
 
 <Step
+  id="step-4-trigger-endpoints"
   number="04"
-  title="Trigger Endpoints to Generate OTP"
+  title="Trigger Endpoints to Generate and Verify OTP"
   time="3 min"
   badge="Simulate Real Traffic"
 >
 
-<div id="step-4-trigger-endpoints"></div>
+In your second terminal, simulate the complete user authentication workflow by making two sequential HTTP requests:
 
-In your second terminal, send HTTP requests to test the user authentication workflow:
+### Request 1: Generate an OTP
+
+First, request an OTP for `devrel@keploy.io`:
 
 <Tabs defaultValue="curl">
   <TabsList>
@@ -279,39 +278,70 @@ http POST localhost:8080/user/getOTP email="devrel@keploy.io"`}
   </TabsContent>
 </Tabs>
 
+### Request 2: Verify the Generated OTP
+
+Inspect the OTP stored in Redis or output by the app, then submit it to `/user/verifyOTP`:
+
+<Tabs defaultValue="curl-verify">
+  <TabsList>
+    <TabsTrigger value="curl-verify">cURL</TabsTrigger>
+    <TabsTrigger value="httpie-verify">HTTPie</TabsTrigger>
+  </TabsList>
+
+  <TabsContent value="curl-verify">
+    <CodeBlock language="bash" filename="Terminal (Verify OTP)">
+{`# 2. Verify the generated OTP (e.g. 849201)
+curl --request POST \\
+  --url http://localhost:8080/user/verifyOTP \\
+  --header 'Content-Type: application/json' \\
+  --data '{
+    "email": "devrel@keploy.io",
+    "otp": "849201"
+  }'
+
+# Expected response:
+# {"status":"success","message":"OTP verified successfully"}`}
+    </CodeBlock>
+  </TabsContent>
+
+  <TabsContent value="httpie-verify">
+    <CodeBlock language="bash" filename="Terminal (HTTPie)">
+{`# 2. Verify OTP using HTTPie
+http POST localhost:8080/user/verifyOTP email="devrel@keploy.io" otp="849201"`}
+    </CodeBlock>
+  </TabsContent>
+</Tabs>
+
 ### What Keploy Did in the Background
 
-As soon as that single `curl` command ran:
-- Gin handled `POST /user/getOTP`.
-- Gin executed `rdb.Set(ctx, "devrel@keploy.io", otp, 5*time.Minute)`.
-- Redis sent back `+OK`.
-- Gin returned HTTP 200 with the JSON body.
-- **Keploy correlated the inbound HTTP request with the outbound Redis `SETEX` command into an atomic test case!**
+As soon as both requests executed:
+- **Request 1:** Gin handled `POST /user/getOTP` and executed Redis `SETEX devrel@keploy.io 300 849201`. Keploy recorded the HTTP call as `test-1.yaml` and the Redis `SETEX` mock as `mock-0` in `mocks.yaml`.
+- **Request 2:** Gin handled `POST /user/verifyOTP` and executed Redis `GET devrel@keploy.io`. Keploy recorded the verification test as `test-2.yaml` and the Redis `GET` mock as `mock-1` in `mocks.yaml`.
 
-Now, stop the recording process in your first terminal by pressing `Ctrl + C`. Keploy will gracefully shut down and write the test artifacts to disk.
+Now stop the recording process in your first terminal by pressing `Ctrl + C`. Keploy will gracefully shut down and write all test specifications and wire mocks to disk.
 
 </Step>
 
 <Step
+  id="step-5-inspect-artifacts"
   number="05"
-  title="Inspect Generated Tests & Mocks"
+  title="Inspect Generated Tests & Wire Mocks"
   time="3 min"
   badge="Artifact Inspection"
 >
 
-<div id="step-5-inspect-artifacts"></div>
-
-Keploy created a `keploy` directory in your project root:
+Keploy created a `keploy` directory in your project root containing your test cases and downstream mocks:
 
 <CodeBlock language="bash" filename="Directory Tree">
 {`keploy/
 └── test-set-0/
-    ├── mocks.yaml      # Captured Redis network wire frames
+    ├── mocks.yaml      # Captured Redis network wire frames (SETEX + GET)
     └── tests/
-        └── test-1.yaml # Inbound HTTP request and expected response`}
+        ├── test-1.yaml # Inbound POST /user/getOTP request & baseline response
+        └── test-2.yaml # Inbound POST /user/verifyOTP request & baseline response`}
 </CodeBlock>
 
-Explore both files interactively using the viewer below:
+Explore each file interactively using the YAML viewer below:
 
 <YamlViewer />
 
@@ -322,15 +352,14 @@ Notice the `assertions.noise` block in `test-1.yaml`. Go web applications often 
 </Step>
 
 <Step
+  id="step-6-replay-tests"
   number="06"
   title="The 'A-Ha!' Moment: Replay Tests Offline"
   time="2 min"
   badge="Hermetic Replay"
 >
 
-<div id="step-6-replay-tests"></div>
-
-Here is where the magic happens. Let's deliberately **stop our Redis container** to prove that Keploy completely virtualizes downstream dependencies:
+Here is where the magic happens. Let&apos;s deliberately **stop our Redis container** to prove that Keploy completely virtualizes downstream dependencies:
 
 <CodeBlock language="bash" filename="Terminal">
 {`# Stop the Redis container completely
@@ -349,7 +378,7 @@ sudo -E keploy test -c "go run main.go" --delay 10`}
 </CodeBlock>
 
 <Callout type="success" title="The Result: 100% Passed!">
-Even though Redis is completely offline, your tests pass with flying colors in under 2 seconds! When the Gin app tried to connect to Redis on port 6379, Keploy intercepted the socket connection and instantly fed it the recorded RESP mock.
+Even though Redis is completely offline, all tests pass with flying colors in under 2 seconds! When the Gin app tried to connect to Redis on port 6379, Keploy intercepted the socket connection and instantly fed it the recorded RESP mock.
 </Callout>
 
 </Step>
@@ -360,7 +389,7 @@ Even though Redis is completely offline, your tests pass with flying colors in u
 
 <h2 id="interactive-simulator">Interactive Test Runner Simulator</h2>
 
-Don't have a terminal handy right now? Experience how Keploy executes tests with Redis offline using our interactive simulator below:
+Don&apos;t have a terminal handy right now? Experience how Keploy executes tests with Redis offline using our interactive simulator below:
 
 <InteractiveSimulator />
 

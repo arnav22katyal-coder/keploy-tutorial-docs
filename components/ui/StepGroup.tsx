@@ -4,6 +4,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 interface StepProps {
+  id?: string
   number: number | string
   title: string
   time?: string
@@ -13,6 +14,7 @@ interface StepProps {
 }
 
 export function Step({
+  id,
   number,
   title,
   time,
@@ -21,7 +23,10 @@ export function Step({
   className,
 }: StepProps) {
   return (
-    <div className={cn('relative pl-10 pb-10 last:pb-2 group', className)}>
+    <div
+      id={id}
+      className={cn('relative pl-10 pb-10 last:pb-2 group scroll-mt-24', className)}
+    >
       {/* Vertical connecting line */}
       <div className="absolute left-[17px] top-9 bottom-0 w-[2px] bg-zinc-200 dark:bg-zinc-800 group-last:hidden" />
 

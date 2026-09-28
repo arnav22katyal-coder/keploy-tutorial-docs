@@ -16,12 +16,14 @@ This project provides an intuitive, beginner-friendly walkthrough explaining how
 
 ### 🎨 Visual & Interactive Components (Bonus Points)
 - **🌓 Light / Dark / System Mode:** Smooth theme switcher with persistent user preference using `next-themes`.
+- **⌨️ ⌘K Command Palette & Quick Search (`<SearchDialog />`):** Full keyboard-navigable search modal with real-time section filtering and instant jumping.
 - **🔄 Interactive Architecture Diagram (`<ArchitectureDiagram />`):** Visualizes how Keploy sits between incoming client traffic, the Go Gin binary, and downstream Redis on port 6379, toggling between **Record Mode** and **Test Mode**.
 - **📊 4-Phase Lifecycle Stepper (`<KeployFlowDiagram />`):** Clickable interactive tabs explaining the 4 stages: Zero-Code Instrumentation ➔ Ingress/Egress Capture ➔ Test & Mock Generation ➔ Hermetic Replay.
-- **🔍 Interactive YAML Inspector (`<YamlViewer />`):** Side-by-side inspectable view of captured `tests/test-1.yaml` (HTTP request/response spec) and `mocks.yaml` (Redis RESP wire protocol payload) with syntax highlighting and deep-dive annotations explaining `assertions.noise`.
+- **🔍 3-File Interactive YAML Inspector (`<YamlViewer />`):** Side-by-side inspectable view of captured `test-1.yaml` (getOTP HTTP spec), `test-2.yaml` (verifyOTP HTTP spec), and `mocks.yaml` (Redis RESP wire protocol payload) with token syntax styling and deep-dive annotations explaining `assertions.noise`.
 - **⚡ Interactive Test Runner Simulator (`<InteractiveSimulator />`):** A simulated interactive terminal where users can trigger a test replay with Redis completely shut down to witness the "A-ha!" moment without needing a local CLI.
+- **💻 Syntax-Highlighted Code Blocks (`<CodeBlock />`):** Tokenized syntax highlighting for Go, Bash, YAML, JSON, and Dockerfile with line numbers, terminal header dots, and copy-to-clipboard functionality.
 - **✅ Prerequisites Checklist (`<PrereqChecklist />`):** Interactive checklist calculating readiness percentage for Go, Docker, Keploy CLI, and cURL.
-- **🎉 Confetti Celebration (`<ConfettiCelebration />`):** Interactive celebratory card with confetti particle burst upon completing the tutorial.
+- **🎉 Confetti Celebration (`<ConfettiCelebration />`):** Interactive celebratory card with particle burst upon completing the tutorial.
 - **📜 Reading Progress Bar & Sticky TOC (`<TableOfContents />`):** Top scroll progress bar and sticky sidebar with active scrollspy heading highlighting and smooth scrolling.
 
 ---
@@ -33,7 +35,7 @@ keploy-tutorial-docs/
 ├── app/
 │   ├── globals.css              # Tailwind base, dark mode tokens & custom typography
 │   ├── layout.tsx               # Root layout with ThemeProvider, fonts & SEO metadata
-│   └── page.tsx                 # Documentation shell, hero banner, TOC sidebar & MDX renderer
+│   └── page.tsx                 # Documentation shell, navbar, ⌘K search, hero & MDX renderer
 ├── components/
 │   ├── theme-provider.tsx       # next-themes client provider
 │   └── ui/
@@ -46,16 +48,19 @@ keploy-tutorial-docs/
 │       ├── KeployFlowDiagram.tsx   # 4-stage testing lifecycle visualizer
 │       ├── PrereqChecklist.tsx  # Dynamic checklist for dev environment
 │       ├── ReadingProgress.tsx  # Scroll depth progress bar
-│       ├── StepGroup.tsx        # Sequential walkthrough steps with timeline lines
-│       ├── TableOfContents.tsx  # Scrollspy-driven table of contents
+│       ├── SearchDialog.tsx     # ⌘K Command palette search modal
+│       ├── StepGroup.tsx        # Sequential walkthrough steps with timeline lines & scroll anchors
+│       ├── TableOfContents.tsx  # Scrollspy-driven table of contents with DOM offset tracking
 │       ├── Tabs.tsx             # Interactive tabbed interface
 │       ├── ThemeToggle.tsx      # Dark / light mode toggle
-│       └── YamlViewer.tsx       # Dual-file YAML viewer for test-1.yaml and mocks.yaml
+│       └── YamlViewer.tsx       # 3-file YAML viewer for test-1, test-2, and mocks
 ├── content/
 │   └── tutorial.mdx             # The complete tutorial authored in rich MDX
 ├── lib/
 │   └── utils.ts                 # Classname merge utility (clsx + tailwind-merge)
 ├── mdx-components.tsx           # Global MDX component mapping for Next.js App Router
+├── mdx.d.ts                     # Ambient TypeScript declarations for MDX
+├── next-env.d.ts                # Next.js ambient environment declarations
 ├── next.config.mjs              # Next.js configuration with MDX and remark/rehype plugins
 ├── package.json                 # Project dependencies and build scripts
 ├── postcss.config.js            # PostCSS configuration
@@ -135,16 +140,22 @@ Run Keploy in recording mode wrapping the Go entrypoint:
 ```bash
 sudo -E keploy record -c "go run main.go"
 ```
-Send sample HTTP requests to trigger the OTP workflow:
+Send sample HTTP requests to trigger the full OTP workflow:
 ```bash
-# Request OTP for email
+# 1. Request OTP for email
 curl -X POST http://localhost:8080/user/getOTP \
   -H "Content-Type: application/json" \
   -d '{"email":"devrel@keploy.io"}'
+
+# 2. Verify the OTP code
+curl -X POST http://localhost:8080/user/verifyOTP \
+  -H "Content-Type: application/json" \
+  -d '{"email":"devrel@keploy.io","otp":"849201"}'
 ```
-Keploy automatically captures the incoming HTTP request, the outgoing Redis `SETEX` command on port 6379, and saves:
-- `keploy/test-set-0/tests/test-1.yaml` (HTTP assertion spec)
-- `keploy/test-set-0/mocks.yaml` (Redis wire protocol mock)
+Keploy automatically captures the incoming HTTP requests, the outgoing Redis `SETEX` and `GET` commands on port 6379, and saves:
+- `keploy/test-set-0/tests/test-1.yaml` (getOTP HTTP assertion spec)
+- `keploy/test-set-0/tests/test-2.yaml` (verifyOTP HTTP assertion spec)
+- `keploy/test-set-0/mocks.yaml` (Redis wire protocol RESP mocks)
 
 ### Phase 3: The "A-Ha!" Moment — Hermetic Offline Replay
 Shut down the Redis server completely:
@@ -155,7 +166,7 @@ Replay the test suite with Keploy:
 ```bash
 sudo -E keploy test -c "go run main.go" --delay 10
 ```
-**Result:** The test passes in milliseconds! Keploy intercepted the app's TCP calls to port 6379 and served the recorded mock data without touching external infrastructure.
+**Result:** All tests pass in milliseconds! Keploy intercepted the app's TCP calls to port 6379 and served the recorded mock data without touching external infrastructure.
 
 ---
 

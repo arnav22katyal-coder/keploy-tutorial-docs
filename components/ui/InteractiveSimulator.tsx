@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Play, RotateCcw, CheckCircle, ServerOff, Terminal, ShieldCheck } from 'lucide-react'
+import { Play, RotateCcw, ServerOff, Terminal, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface LogEntry {
@@ -13,8 +13,8 @@ interface LogEntry {
 const simulationLogs: LogEntry[] = [
   { text: '$ docker stop redis-server', color: 'text-amber-400 font-bold', delay: 200 },
   { text: 'redis-server stopped. (Notice: Redis is now offline!)', color: 'text-zinc-400 italic', delay: 600 },
-  { text: '$ keploy test -c "go run main.go" --delay 10', color: 'text-brand-400 font-bold', delay: 1100 },
-  { text: '[KEPLOY] 🐰 Keploy v2.4.0 (Enterprise-grade eBPF engine initialized)', color: 'text-zinc-300', delay: 1500 },
+  { text: '$ sudo -E keploy test -c "go run main.go" --delay 10', color: 'text-brand-400 font-bold', delay: 1100 },
+  { text: '[KEPLOY] 🐰 Keploy v2.4.0 (Zero-code eBPF engine initialized)', color: 'text-zinc-300', delay: 1500 },
   { text: '[KEPLOY] Starting target application: "go run main.go"', color: 'text-blue-400', delay: 1900 },
   { text: '[GIN-debug] POST   /user/getOTP              --> main.handleGetOTP (3 handlers)', color: 'text-zinc-500', delay: 2300 },
   { text: '[GIN-debug] POST   /user/verifyOTP           --> main.handleVerifyOTP (3 handlers)', color: 'text-zinc-500', delay: 2500 },
@@ -30,7 +30,7 @@ const simulationLogs: LogEntry[] = [
   { text: '[KEPLOY TEST] ✅ test-2 PASSED (Status: 200 OK | OTP verified successfully)', color: 'text-emerald-300 font-bold', delay: 6600 },
   { text: '==================================================', color: 'text-zinc-600', delay: 7000 },
   { text: '🎉 TEST RUN COMPLETE: 2 Passed, 0 Failed, 0 Skipped', color: 'text-emerald-400 font-bold', delay: 7200 },
-  { text: '🚀 Execution time: 1.2s (Zero external Redis dependency required!)', color: 'text-brand-300 font-semibold', delay: 7400 },
+  { text: '🚀 Total execution time: 1.2s (Zero live Redis dependency required!)', color: 'text-brand-300 font-semibold', delay: 7400 },
 ]
 
 export function InteractiveSimulator() {
@@ -38,24 +38,39 @@ export function InteractiveSimulator() {
   const [displayedLogs, setDisplayedLogs] = React.useState<LogEntry[]>([])
   const [isCompleted, setIsCompleted] = React.useState(false)
   const logsEndRef = React.useRef<HTMLDivElement>(null)
+  const timeoutIdsRef = React.useRef<NodeJS.Timeout[]>([])
+
+  const clearAllTimeouts = () => {
+    timeoutIdsRef.current.forEach(clearTimeout)
+    timeoutIdsRef.current = []
+  }
+
+  React.useEffect(() => {
+    return () => {
+      clearAllTimeouts()
+    }
+  }, [])
 
   const runSimulation = () => {
+    clearAllTimeouts()
     setIsRunning(true)
     setIsCompleted(false)
     setDisplayedLogs([])
 
     simulationLogs.forEach((entry, index) => {
-      setTimeout(() => {
+      const tid = setTimeout(() => {
         setDisplayedLogs((prev) => [...prev, entry])
         if (index === simulationLogs.length - 1) {
           setIsRunning(false)
           setIsCompleted(true)
         }
       }, entry.delay)
+      timeoutIdsRef.current.push(tid)
     })
   }
 
   const resetSimulation = () => {
+    clearAllTimeouts()
     setIsRunning(false)
     setIsCompleted(false)
     setDisplayedLogs([])
@@ -104,7 +119,7 @@ export function InteractiveSimulator() {
             <button
               type="button"
               onClick={runSimulation}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow transition-all"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Run Again
@@ -115,7 +130,7 @@ export function InteractiveSimulator() {
             <button
               type="button"
               onClick={resetSimulation}
-              className="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1"
+              className="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 transition-colors"
             >
               Reset
             </button>
@@ -156,7 +171,7 @@ export function InteractiveSimulator() {
           <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
           <div>
             <strong className="text-emerald-200 font-semibold">The Core DevRel Insight: </strong>
-            Notice how Redis was shut down before running tests, yet the OTP verification passed seamlessly. Keploy intercepted Redis wire requests and supplied the captured responses from <code className="text-white font-mono">mocks.yaml</code>. Your tests become fast, 100% deterministic, and ready for CI without test databases!
+            Notice how Redis was shut down before running tests, yet the OTP verification passed seamlessly. Keploy intercepted Redis wire requests and supplied the captured responses from <code className="text-white font-mono bg-zinc-900 px-1 py-0.5 rounded">mocks.yaml</code>. Your tests become fast, 100% deterministic, and ready for CI without test databases!
           </div>
         </div>
       )}
