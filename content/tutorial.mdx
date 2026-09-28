@@ -1,0 +1,427 @@
+import { Callout } from '@/components/ui/Callout'
+import { StepGroup, Step } from '@/components/ui/StepGroup'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
+import { CodeBlock } from '@/components/ui/CodeBlock'
+import { ArchitectureDiagram } from '@/components/ui/ArchitectureDiagram'
+import { KeployFlowDiagram } from '@/components/ui/KeployFlowDiagram'
+import { YamlViewer } from '@/components/ui/YamlViewer'
+import { InteractiveSimulator } from '@/components/ui/InteractiveSimulator'
+import { PrereqChecklist } from '@/components/ui/PrereqChecklist'
+import { ConfettiCelebration } from '@/components/ui/ConfettiCelebration'
+
+# Testing Go Applications with Keploy: The Zero-Code Guide
+
+Testing Go backend services has historically forced developers to choose between two painful extremes:
+1. **Mocking Hell:** Writing verbose interfaces, dependency injection boilerplate, and fragile `gomock` / `testify` stubs for every database or external API call.
+2. **Flaky Integration Tests:** Orchestrating live Docker containers, seeding database state, managing race conditions, and enduring slow CI pipelines.
+
+**Keploy introduces a third way:** It records real API calls alongside downstream network I/O (like Redis, SQL databases, and third-party APIs) directly at the transport layer, generating deterministic test cases and wire-level mocks without altering a single line of your Go code.
+
+In this tutorial, you will take a **Go Gin** user authentication service that depends on **Redis** for OTP (One-Time Password) verification, record real traffic with Keploy, inspect the auto-generated YAML specifications, and replay the tests completely offline—**even with Redis turned off!**
+
+---
+
+<h2 id="why-keploy-for-go">Why Keploy for Go Developers?</h2>
+
+Go is renowned for its speed, simplicity, and rock-solid concurrency. But testing stateful web services in Go frequently introduces interface pollution. To test a handler that touches Redis, you often end up creating:
+
+```go
+// Traditional approach: interface pollution just for mocking
+type OTPStore interface {
+    SetOTP(ctx context.Context, email, otp string) error
+    GetOTP(ctx context.Context, email string) (string, error)
+}
+```
+
+While clean architecture is valuable, mocking complex database interactions like Redis TTL expirations, transaction pipelines, and socket failures by hand is tedious and disconnected from production reality.
+
+<Callout type="keploy" title="The Keploy Difference: eBPF & Socket Interception">
+Keploy does not require you to rewrite your codebase to use mock interfaces. By attaching to network sockets (via eBPF on Linux or a transparent proxy mechanism), Keploy observes the exact binary protocols exchanged between your Go application and downstream dependencies. When tests replay, Keploy serves the exact recorded bytes back to your client library.
+</Callout>
+
+<ArchitectureDiagram />
+
+---
+
+<h2 id="prerequisites">Prerequisites & System Setup</h2>
+
+Before starting, ensure you have the necessary developer tools installed. You can check off each item in the interactive checklist below:
+
+<PrereqChecklist />
+
+### Installing the Keploy CLI
+
+Install the official Keploy binary for your operating system:
+
+<Tabs defaultValue="linux">
+  <TabsList>
+    <TabsTrigger value="linux">Linux / WSL</TabsTrigger>
+    <TabsTrigger value="macos">macOS (Homebrew / Docker)</TabsTrigger>
+    <TabsTrigger value="windows">Windows</TabsTrigger>
+  </TabsList>
+
+  <TabsContent value="linux">
+    <CodeBlock language="bash" filename="Install Keploy on Linux / WSL">
+{`# Download and install the latest Keploy binary
+curl --silent --location "https://github.com/keploy/keploy/releases/latest/download/keploy_linux_amd64.tar.gz" | tar xz -C /tmp
+sudo mv /tmp/keploy /usr/local/bin/keploy
+
+# Verify the installation
+keploy --version`}
+    </CodeBlock>
+  </TabsContent>
+
+  <TabsContent value="macos">
+    <CodeBlock language="bash" filename="Install Keploy on macOS">
+{`# Install via Homebrew
+brew tap keploy/keploy
+brew install keploy
+
+# Or run Keploy using Docker on macOS
+docker pull ghcr.io/keploy/keploy:latest`}
+    </CodeBlock>
+    <Callout type="tip" title="macOS Note">
+    Because eBPF is native to Linux, Keploy on macOS seamlessly uses Docker networking or proxy mode to intercept socket traffic.
+    </Callout>
+  </TabsContent>
+
+  <TabsContent value="windows">
+    <CodeBlock language="bash" filename="Windows Setup">
+{`# We recommend running Keploy inside WSL2 (Ubuntu) for full eBPF support:
+wsl --install
+# Inside WSL2, run the Linux installation curl script above`}
+    </CodeBlock>
+  </TabsContent>
+</Tabs>
+
+---
+
+<h2 id="architecture-deep-dive">The 4-Phase Keploy Lifecycle</h2>
+
+Before running the commands, let's understand how Keploy transitions from recording mode to hermetic test replay:
+
+<KeployFlowDiagram />
+
+---
+
+<StepGroup>
+
+<Step
+  number="01"
+  title="Clone the Gin + Redis Sample Application"
+  time="2 min"
+  badge="Codebase Setup"
+>
+
+<div id="step-1-clone-app"></div>
+
+Keploy provides an official sample repository featuring a Gin web service integrated with Redis. Clone the repository and navigate into the `gin-redis` directory:
+
+<CodeBlock language="bash" filename="Terminal">
+{`# Clone the official Keploy Go samples
+git clone https://github.com/keploy/samples-go.git
+
+# Navigate to the gin-redis quickstart
+cd samples-go/gin-redis
+
+# Download Go module dependencies
+go mod download`}
+</CodeBlock>
+
+### Understanding the Application Logic
+
+The service exposes two primary authentication endpoints in `main.go`:
+
+1. `POST /user/getOTP`: Accepts an email, generates a 6-digit cryptographic OTP, and sets it in Redis with a 5-minute TTL (`SETEX email 300 otp`).
+2. `POST /user/verifyOTP`: Accepts an email and OTP, retrieves the stored OTP from Redis (`GET email`), and verifies whether they match.
+
+Here is a snippet of how standard `go-redis` is invoked in `main.go`:
+
+<CodeBlock language="go" filename="main.go (Simplified Excerpt)">
+{`// Generate and store OTP in Redis
+rdb := redis.NewClient(&redis.Options{
+    Addr: "localhost:6379",
+})
+
+r.POST("/user/getOTP", func(c *gin.Context) {
+    var req struct {
+        Email string \`json:"email"\`
+    }
+    if err := c.BindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+        return
+    }
+
+    otp := generateOTP(6)
+    // Downstream Redis call captured by Keploy:
+    err := rdb.Set(c.Request.Context(), req.Email, otp, 5*time.Minute).Err()
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store OTP"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "status": "success",
+        "message": "OTP generated and stored successfully",
+    })
+})`}
+</CodeBlock>
+
+<Callout type="info" title="Zero Instrumentation">
+Notice that `main.go` uses standard `github.com/gin-gonic/gin` and `github.com/redis/go-redis/v9`. There are **no Keploy SDK imports, no test wrappers, and no code modifications.**
+</Callout>
+
+</Step>
+
+<Step
+  number="02"
+  title="Spin Up Downstream Redis"
+  time="1 min"
+  badge="Infrastructure"
+>
+
+<div id="step-2-start-redis"></div>
+
+During the **Record** phase, Keploy needs a live instance of Redis so your application can perform its normal operations. We can start Redis quickly using Docker:
+
+<CodeBlock language="bash" filename="Terminal">
+{`# Start a lightweight Redis container on port 6379
+docker run -p 6379:6379 --name redis-server -d redis:alpine
+
+# Verify Redis is accepting connections
+docker exec -it redis-server redis-cli ping
+# Expected response: PONG`}
+</CodeBlock>
+
+<Callout type="tip" title="Why Redis is only needed once">
+You will only need this live Redis container running while you record your initial test cases. Once Keploy captures the network responses, **Redis will never be needed again for your test suite!**
+</Callout>
+
+</Step>
+
+<Step
+  number="03"
+  title="Record Traffic with Keploy"
+  time="2 min"
+  badge="Core Command"
+>
+
+<div id="step-3-record-traffic"></div>
+
+Now, instead of launching your application with `go run main.go`, wrap it with `keploy record`:
+
+<CodeBlock language="bash" filename="Terminal">
+{`# Launch application under Keploy recording mode
+sudo -E keploy record -c "go run main.go"`
+}
+</CodeBlock>
+
+<Callout type="keploy" title="What is happening right now?">
+1. Keploy initializes its eBPF network hooks and attaches to your Go process.
+2. It launches `go run main.go`. The Gin server starts listening on port `8080`.
+3. Keploy monitors inbound traffic on port `8080` and outbound socket traffic to `localhost:6379`.
+</Callout>
+
+You should see Keploy terminal logs indicating that the interceptor is active:
+
+<CodeBlock language="bash" filename="Terminal Output">
+{`🐰 Keploy v2.4.0
+[KEPLOY] starting Keploy in record mode...
+[KEPLOY] starting application: go run main.go
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware.
+[GIN-debug] POST   /user/getOTP              --> main.handleGetOTP (3 handlers)
+[GIN-debug] POST   /user/verifyOTP           --> main.handleVerifyOTP (3 handlers)
+[GIN-debug] [WARNING] Listening and serving HTTP on :8080
+[KEPLOY] interceptor loaded successfully. Ready for incoming traffic...`}
+</CodeBlock>
+
+Keep this terminal running. Open a second terminal window for the next step.
+
+</Step>
+
+<Step
+  number="04"
+  title="Trigger Endpoints to Generate OTP"
+  time="3 min"
+  badge="Simulate Real Traffic"
+>
+
+<div id="step-4-trigger-endpoints"></div>
+
+In your second terminal, send HTTP requests to test the user authentication workflow:
+
+<Tabs defaultValue="curl">
+  <TabsList>
+    <TabsTrigger value="curl">cURL</TabsTrigger>
+    <TabsTrigger value="httpie">HTTPie</TabsTrigger>
+  </TabsList>
+
+  <TabsContent value="curl">
+    <CodeBlock language="bash" filename="Terminal (API Calls)">
+{`# 1. Request an OTP for a user
+curl --request POST \\
+  --url http://localhost:8080/user/getOTP \\
+  --header 'Content-Type: application/json' \\
+  --data '{
+    "email": "devrel@keploy.io"
+  }'
+
+# Expected response:
+# {"status":"success","message":"OTP generated and stored successfully"}`}
+    </CodeBlock>
+  </TabsContent>
+
+  <TabsContent value="httpie">
+    <CodeBlock language="bash" filename="Terminal (HTTPie)">
+{`# 1. Request an OTP using HTTPie
+http POST localhost:8080/user/getOTP email="devrel@keploy.io"`}
+    </CodeBlock>
+  </TabsContent>
+</Tabs>
+
+### What Keploy Did in the Background
+
+As soon as that single `curl` command ran:
+- Gin handled `POST /user/getOTP`.
+- Gin executed `rdb.Set(ctx, "devrel@keploy.io", otp, 5*time.Minute)`.
+- Redis sent back `+OK`.
+- Gin returned HTTP 200 with the JSON body.
+- **Keploy correlated the inbound HTTP request with the outbound Redis `SETEX` command into an atomic test case!**
+
+Now, stop the recording process in your first terminal by pressing `Ctrl + C`. Keploy will gracefully shut down and write the test artifacts to disk.
+
+</Step>
+
+<Step
+  number="05"
+  title="Inspect Generated Tests & Mocks"
+  time="3 min"
+  badge="Artifact Inspection"
+>
+
+<div id="step-5-inspect-artifacts"></div>
+
+Keploy created a `keploy` directory in your project root:
+
+<CodeBlock language="bash" filename="Directory Tree">
+{`keploy/
+└── test-set-0/
+    ├── mocks.yaml      # Captured Redis network wire frames
+    └── tests/
+        └── test-1.yaml # Inbound HTTP request and expected response`}
+</CodeBlock>
+
+Explore both files interactively using the viewer below:
+
+<YamlViewer />
+
+<Callout type="tip" title="Handling Dynamic Data (Noise Filtering)">
+Notice the `assertions.noise` block in `test-1.yaml`. Go web applications often return dynamic values such as timestamps, unique request IDs, or JWT tokens. Keploy automatically flags non-deterministic headers (like `Date`) so your tests will not fail just because seconds ticked by!
+</Callout>
+
+</Step>
+
+<Step
+  number="06"
+  title="The 'A-Ha!' Moment: Replay Tests Offline"
+  time="2 min"
+  badge="Hermetic Replay"
+>
+
+<div id="step-6-replay-tests"></div>
+
+Here is where the magic happens. Let's deliberately **stop our Redis container** to prove that Keploy completely virtualizes downstream dependencies:
+
+<CodeBlock language="bash" filename="Terminal">
+{`# Stop the Redis container completely
+docker stop redis-server
+
+# Verify Redis is offline
+docker ps | grep redis
+# (No container returned)`}
+</CodeBlock>
+
+Now run the Keploy test command:
+
+<CodeBlock language="bash" filename="Terminal">
+{`# Execute test replay without Redis
+sudo -E keploy test -c "go run main.go" --delay 10`}
+</CodeBlock>
+
+<Callout type="success" title="The Result: 100% Passed!">
+Even though Redis is completely offline, your tests pass with flying colors in under 2 seconds! When the Gin app tried to connect to Redis on port 6379, Keploy intercepted the socket connection and instantly fed it the recorded RESP mock.
+</Callout>
+
+</Step>
+
+</StepGroup>
+
+---
+
+<h2 id="interactive-simulator">Interactive Test Runner Simulator</h2>
+
+Don't have a terminal handy right now? Experience how Keploy executes tests with Redis offline using our interactive simulator below:
+
+<InteractiveSimulator />
+
+---
+
+<h2 id="ci-cd-integration">Integrating Keploy into CI/CD (GitHub Actions)</h2>
+
+Because Keploy mocks all downstream databases hermetically, your CI pipeline no longer needs `services: redis` or database migrations. Tests run fast, offline, and reproducibly.
+
+Here is a ready-to-use GitHub Actions workflow file:
+
+<CodeBlock language="yaml" filename=".github/workflows/keploy.yml">
+{`name: Keploy Regression Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Install Keploy CLI
+        run: |
+          curl --silent --location "https://github.com/keploy/keploy/releases/latest/download/keploy_linux_amd64.tar.gz" | tar xz -C /tmp
+          sudo mv /tmp/keploy /usr/local/bin/keploy
+
+      # Notice: No Redis service container needed!
+      - name: Run Hermetic Keploy Tests
+        run: |
+          sudo -E keploy test -c "go run main.go" --delay 10 --generate-coverage`}
+</CodeBlock>
+
+---
+
+<h2 id="key-takeaways">Key Takeaways & Comparison</h2>
+
+| Feature | Traditional Unit Testing | End-to-End Testing | Keploy |
+| :--- | :--- | :--- | :--- |
+| **Code Changes** | High (interfaces, dependency injection) | Low | **Zero (works on unmodified binaries)** |
+| **Mocking Effort** | Manual (`gomock`, stubs) | None (uses real DB) | **Automatic (captures network bytes)** |
+| **Execution Speed** | Fast (<1s) | Slow (minutes) | **Fast (runs in seconds)** |
+| **Flakiness** | Low | High (network drops, state drift) | **Deterministic (idempotent YAML)** |
+| **Coverage Accuracy**| Synthetic / Mock assumptions | Real production flows | **Real traffic captured accurately** |
+
+<ConfettiCelebration />
+
+### Next Steps & Resources
+
+- [Official Keploy Documentation](https://keploy.io/docs)
+- [Keploy GitHub Repository](https://github.com/keploy/keploy)
+- [Join the Keploy Slack / Discord Community](https://keploy.io/community)
+- [Explore more Go Quickstarts (Echo, Fiber, Mongo, Postgres)](https://github.com/keploy/samples-go)
