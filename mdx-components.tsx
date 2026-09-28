@@ -3,16 +3,9 @@ import * as React from 'react'
 import { Callout } from '@/components/ui/Callout'
 import { StepGroup, Step } from '@/components/ui/StepGroup'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
-import { CodeBlock } from '@/components/ui/CodeBlock'
-import { ArchitectureDiagram } from '@/components/ui/ArchitectureDiagram'
-import { KeployFlowDiagram } from '@/components/ui/KeployFlowDiagram'
-import { YamlViewer } from '@/components/ui/YamlViewer'
-import { InteractiveSimulator } from '@/components/ui/InteractiveSimulator'
-import { PrereqChecklist } from '@/components/ui/PrereqChecklist'
-import { ConfettiCelebration } from '@/components/ui/ConfettiCelebration'
+import { Pre, Figure, Figcaption } from '@/components/ui/Pre'
 
 export const customMDXComponents: MDXComponents = {
-  // Standard Markdown elements customized for clean developer docs
   h1: ({ children, ...props }) => (
     <h1
       className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground font-sans mt-8 mb-4 border-b border-border/70 pb-3"
@@ -107,16 +100,6 @@ export const customMDXComponents: MDXComponents = {
     </td>
   ),
   code: ({ children, className, ...props }: any) => {
-    const match = /language-(\w+)/.exec(className || '')
-    const isMultiline = typeof children === 'string' && children.includes('\n')
-
-    if (match || isMultiline) {
-      const language = match ? match[1] : 'bash'
-      const rawCode = typeof children === 'string' ? children : String(children)
-      return <CodeBlock language={language} code={rawCode} />
-    }
-
-    // Inline code snippet
     return (
       <code
         className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[13px] font-semibold text-brand-600 dark:text-brand-400 border border-border/60"
@@ -126,31 +109,9 @@ export const customMDXComponents: MDXComponents = {
       </code>
     )
   },
-  pre: ({ children, ...props }: any) => {
-    // Check if children is a React element containing code
-    if (React.isValidElement(children)) {
-      const childProps = children.props as any
-      const className = childProps?.className || ''
-      const match = /language-(\w+)/.exec(className)
-      const language = match ? match[1] : ''
-      const rawCode =
-        typeof childProps?.children === 'string'
-          ? childProps.children
-          : Array.isArray(childProps?.children)
-          ? childProps.children.join('')
-          : ''
-
-      if (language || rawCode.includes('\n')) {
-        return (
-          <CodeBlock
-            language={language || 'bash'}
-            code={rawCode}
-          />
-        )
-      }
-    }
-    return <div className="my-4">{children}</div>
-  },
+  pre: Pre as any,
+  figure: Figure as any,
+  figcaption: Figcaption as any,
   a: ({ href, children, ...props }) => {
     const isExternal = href?.startsWith('http')
     return (
@@ -166,7 +127,6 @@ export const customMDXComponents: MDXComponents = {
     )
   },
 
-  // Custom Interactive Doc Components
   Callout,
   StepGroup,
   Step,
@@ -174,13 +134,6 @@ export const customMDXComponents: MDXComponents = {
   TabsList,
   TabsTrigger,
   TabsContent,
-  CodeBlock,
-  ArchitectureDiagram,
-  KeployFlowDiagram,
-  YamlViewer,
-  InteractiveSimulator,
-  PrereqChecklist,
-  ConfettiCelebration,
 }
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
